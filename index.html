@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>e‑calc | كهربا شهرية</title>
+  <title>e-calc | كهربا شهرية</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -22,7 +22,7 @@
     [data-theme="forest"]{--bg:#0e1412;--card:#141b19;--primary:#4ade80;--accent:#9be7c4;}
     [data-theme="sunset"]{--bg:#1b1117;--card:#22151b;--primary:#ff8ba7;--accent:#ffd6a5;}
     [data-theme="midnight"]{--bg:#090a0f;--card:#0e1117;--primary:#7aa2f7;--accent:#c3e88d;}
-    [data-theme="latte"]{--bg:#f6f3ef;--fg:#241f18;--card:#fff;--muted:#6d6256;--primary:#7c5cfc;--accent:#00c2a8;--shadow:0 10px 25px rgba(32,24,16,.12);} 
+    [data-theme="latte"]{--bg:#f6f3ef;--fg:#241f18;--card:#fff;--muted:#6d6256;--primary:#7c5cfc;--accent:#00c2a8;--shadow:0 10px 25px rgba(32,24,16,.12);}
     [data-theme="rose"]{--bg:#1a1214;--card:#22171a;--primary:#f472b6;--accent:#fca5a5;}
     [data-theme="mint"]{--bg:#0d1413;--card:#111b19;--primary:#34d399;--accent:#a7f3d0;}
     [data-theme="amber"]{--bg:#171207;--card:#1f180a;--primary:#f59e0b;--accent:#fde68a;}
@@ -88,7 +88,7 @@
       <div class="brand">
         <div class="logo"></div>
         <div class="title">
-          <h1>e‑calc — كهربا شهرية</h1>
+          <h1>e-calc — كهربا شهرية</h1>
           <small>حساب الاستهلاك والدفعات بسعر 0.67 شيكل/ك.و.س</small>
         </div>
       </div>
@@ -135,6 +135,19 @@
             <button id="addReading" class="btn btn-primary">إضافة قراءة</button>
           </div>
         </div>
+
+        <!-- === الحسبة الفورية بناءً على الفرق بين القراءة السابقة والحالية === -->
+        <div class="row">
+          <div class="field" style="flex:2">
+            <label>الحسبة الفورية (من آخر قراءة مُسجلة)</label>
+            <div class="pill" id="instantPay">—</div>
+            <small id="instantInfo" style="color:var(--muted)">أدخل قراءة وتاريخاً لنحسب المطلوب فوراً.</small>
+          </div>
+          <div class="field" style="align-self:end;max-width:180px">
+            <button id="calcNow" class="btn btn-ghost" title="احسبي الآن">احسبي الآن</button>
+          </div>
+        </div>
+
         <div class="hr"></div>
         <div class="row">
           <div class="field">
@@ -204,8 +217,8 @@
 
   <script>
   // ================== CONFIG ==================
-  // ضعِ رابط GAS الافتراضي هنا ليشتغل تلقائياً على أي جهاز (يمكن تغييره من الواجهة)
-  const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbxqWiRA85iGHzYJsRokVATL-zUOc2sLBMlNL7b6ZAUiQtzu-I5Qd-93BAOz87BoH9Cz/exec"; // مثال: https://script.google.com/macros/s/XXXXXXXX/exec
+  // رابط GAS الافتراضي ليعمل تلقائياً على أي جهاز (يمكن تغييره من الواجهة)
+  const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbxqWiRA85iGHzYJsRokVATL-zUOc2sLBMlNL7b6ZAUiQtzu-I5Qd-93BAOz87BoH9Cz/exec";
   const CONFIG = {
     GAS_URL: (localStorage.getItem('GAS_URL') && localStorage.getItem('GAS_URL') !== 'null') ? localStorage.getItem('GAS_URL') : DEFAULT_GAS_URL,
     JSONP_CALLBACK_PREFIX: '__ecb_',
@@ -214,6 +227,7 @@
   // ============= Utilities =============
   const $ = (s)=>document.querySelector(s);
   const fmt = new Intl.NumberFormat('ar-EG', {maximumFractionDigits:2});
+  const fmtMoneyAbs = (n)=> fmt.format(Math.abs(n)) + ' ₪';
   const fmtMoney = (n)=> (n>=0?'+':'−') + ' ' + fmt.format(Math.abs(n)) + ' ₪';
   const fmtPlain = (n)=> fmt.format(n);
 
@@ -233,11 +247,8 @@
     document.body.appendChild(n); setTimeout(()=>n.remove(), 2200);
   }
 
-  // ===== Bind GAS URL input
-  function syncGasUrlUI(){
-    const input = $('#gasUrlInput');
-    input.value = CONFIG.GAS_URL || '';
-  }
+  // ===== GAS URL input
+  function syncGasUrlUI(){ $('#gasUrlInput').value = CONFIG.GAS_URL || ''; }
   function saveGasUrl(){
     const val = $('#gasUrlInput').value.trim();
     if(val && val.startsWith('http')){
@@ -329,6 +340,48 @@
     return {totalKwh, totalPaid, balance, perMonth};
   }
 
+  // ====== Helpers for instant calc ======
+  function lastReadingBefore(dateISO){
+    const rs = [...model.readings].sort((a,b)=> a.dateISO.localeCompare(b.dateISO));
+    for(let i=rs.length-1; i>=0; i--){
+      if(rs[i].dateISO <= dateISO) return rs[i];
+    }
+    return rs.length ? rs[rs.length-1] : null;
+  }
+
+  function previewPaymentForCurrentInput(){
+    const dateISO = $('#readDate').value || new Date().toISOString().slice(0,10);
+    const valStr = $('#readValue').value;
+    const instantPay = $('#instantPay');
+    const instantInfo = $('#instantInfo');
+    const t = store.tariff();
+
+    if(!valStr){
+      instantPay.textContent = '—';
+      instantInfo.textContent = 'أدخل قراءة وتاريخاً لنحسب المطلوب فوراً.';
+      return;
+    }
+    const currentVal = Number(valStr);
+    const prev = lastReadingBefore(dateISO);
+
+    if(!prev){
+      instantPay.textContent = '—';
+      instantInfo.textContent = 'هذه أول قراءة — لا توجد قراءة سابقة للمقارنة.';
+      return;
+    }
+
+    const diff = currentVal - Number(prev.valueKwh);
+    if(diff < 0){
+      instantPay.textContent = 'قراءة أقل من السابقة';
+      instantInfo.textContent = `القراءة السابقة كانت ${fmtPlain(prev.valueKwh)} ك.و.س بتاريخ ${new Date(prev.dateISO).toLocaleDateString('ar-EG')}.`;
+      return;
+    }
+
+    const cost = diff * t;
+    instantPay.textContent = `لازم تدفع ${fmtMoneyAbs(cost)} وهي قيمة ${fmtPlain(diff)} ك.و.س`;
+    instantInfo.textContent = `من ${new Date(prev.dateISO).toLocaleDateString('ar-EG')} حتى ${new Date(dateISO).toLocaleDateString('ar-EG')} بسعر ${t} ₪/ك.و.س`;
+  }
+
   // ====== Render ======
   function renderAll(model){
     const {readings, payments, tariff} = model;
@@ -359,7 +412,10 @@
       const val = item.t==='reading'? fmtPlain(item.a.valueKwh)+' ك.و.س' : fmtPlain(item.a.amount)+' ₪';
       tr.innerHTML = `<td>${date}</td><td>${type}</td><td>${val}</td><td style="color:var(--muted)">${item.a.id?.slice(0,8) || ''}</td>`;
       tbody.appendChild(tr);
-    })
+    });
+
+    // حدّث الحسبة الفورية بعد أي تحديث للبيانات
+    previewPaymentForCurrentInput();
   }
 
   // ====== Model ======
@@ -378,8 +434,11 @@
     const dateISO = $('#readDate').value || new Date().toISOString().slice(0,10);
     const valueKwh = $('#readValue').value; if(!valueKwh){ notify('أدخلي قراءة صحيحة','err'); return; }
     const res = await jsonp({action:'addReading', dateISO, valueKwh});
-    if(res.ok){ notify('تمت إضافة القراءة'); $('#readValue').value=''; refresh(); }
-    else notify('تعذر الإضافة','err');
+    if(res.ok){
+      notify('تمت إضافة القراءة');
+      $('#readValue').value='';
+      refresh();
+    } else notify('تعذر الإضافة','err');
   }
   async function addPayment(){
     const dateISO = $('#payDate').value || new Date().toISOString().slice(0,10);
@@ -399,7 +458,8 @@
   function importJSON(file){
     const reader = new FileReader();
     reader.onload = async ()=>{
-      try{ const data = JSON.parse(reader.result);
+      try{
+        const data = JSON.parse(reader.result);
         if(CONFIG.GAS_URL){ notify('استيراد محلي (Mock). للتجميعي عبر GAS نوفر لاحقاً','err'); }
         localStorage.setItem('e_calc_mock_v1', JSON.stringify({readings:data.readings||[], payments:data.payments||[]}));
         if(data.tariff) store.setTariff(data.tariff);
@@ -414,7 +474,8 @@
   async function saveTariff(){
     const t = Number($('#tariff').value || 0.67); store.setTariff(t);
     await jsonp({action:'setTariff', tariff: t});
-    notify('تم حفظ السعر'); renderAll(model);
+    notify('تم حفظ السعر');
+    renderAll(model);
   }
 
   // ============= Init =============
@@ -434,6 +495,12 @@
     // GAS URL UI
     $('#saveGasUrl').addEventListener('click', saveGasUrl);
     syncGasUrlUI();
+
+    // الحسبة الفورية عند الكتابة/تغيير التاريخ/السعر
+    $('#readValue').addEventListener('input', previewPaymentForCurrentInput);
+    $('#readDate').addEventListener('change', previewPaymentForCurrentInput);
+    $('#tariff').addEventListener('input', previewPaymentForCurrentInput);
+    $('#calcNow').addEventListener('click', previewPaymentForCurrentInput);
 
     refresh();
   })();
