@@ -68,6 +68,7 @@
     th{color:var(--muted);font-weight:600}
     .tag{padding:6px 10px;border-radius:999px;font-size:12px}
     .tag.read{background:color-mix(in oklab, var(--accent) 18%, transparent)}
+    .tag.baseline{background:color-mix(in oklab, var(--warn) 25%, transparent)}
     .tag.pay{background:color-mix(in oklab, var(--primary) 18%, transparent)}
 
     /* Animations */
@@ -129,7 +130,8 @@
           </div>
           <div class="field">
             <label>قراءة العداد (ك.و.س)</label>
-            <input type="number" step="0.01" id="readValue" class="input" placeholder="مثال: 12543.7">
+            <input type="number" step="0.01" id="readValue" class="input" placeholder="مثال: 7000 أو 12543.7">
+            <small style="color:var(--muted)">تنبيه: **أول قراءة تُعتبر مرجعية** ولا تُحسب — مثال: إذا بدأت من 7000 فهي صفر بالنسبة إليك.</small>
           </div>
           <div class="field" style="align-self:end">
             <button id="addReading" class="btn btn-primary">إضافة قراءة</button>
@@ -143,8 +145,9 @@
             <div class="pill" id="instantPay">—</div>
             <small id="instantInfo" style="color:var(--muted)">أدخل قراءة وتاريخاً لنحسب المطلوب فوراً.</small>
           </div>
-          <div class="field" style="align-self:end;max-width:180px">
+          <div class="field" style="align-self:end;max-width:220px;gap:8px">
             <button id="calcNow" class="btn btn-ghost" title="احسبي الآن">احسبي الآن</button>
+            <button id="addInstantPayment" class="btn btn-primary" title="أضف الدفعة بنفس القيمة الآن" disabled>أضف الدفعة الآن</button>
           </div>
         </div>
 
@@ -162,6 +165,7 @@
             <button id="addPayment" class="btn btn-primary">إضافة دفعة</button>
           </div>
         </div>
+
         <div class="hr"></div>
         <div class="row">
           <div class="stat">
@@ -217,7 +221,6 @@
 
   <script>
   // ================== CONFIG ==================
-  // رابط GAS الافتراضي ليعمل تلقائياً على أي جهاز (يمكن تغييره من الواجهة)
   const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbxqWiRA85iGHzYJsRokVATL-zUOc2sLBMlNL7b6ZAUiQtzu-I5Qd-93BAOz87BoH9Cz/exec";
   const CONFIG = {
     GAS_URL: (localStorage.getItem('GAS_URL') && localStorage.getItem('GAS_URL') !== 'null') ? localStorage.getItem('GAS_URL') : DEFAULT_GAS_URL,
@@ -244,7 +247,7 @@
     n.style.position='fixed'; n.style.insetInline='0'; n.style.bottom='16px'; n.style.margin='auto'; n.style.width='fit-content';
     n.style.padding='10px 14px'; n.style.borderRadius='999px'; n.style.background = kind==='err'? 'var(--danger)': 'var(--primary)';
     n.style.color = kind==='err'? '#fff':'#0b0b0c'; n.style.boxShadow='var(--shadow)'; n.className='fade-in';
-    document.body.appendChild(n); setTimeout(()=>n.remove(), 2200);
+    document.body.appendChild(n); setTimeout(()=>n.remove(), 2400);
   }
 
   // ===== GAS URL input
@@ -315,7 +318,7 @@
     for(let i=1;i<rs.length;i++){
       const prev = rs[i-1], cur = rs[i];
       const diff = Number(cur.valueKwh) - Number(prev.valueKwh);
-      if(diff < 0) continue;
+      if(diff < 0) continue; // نتجاهل إدخال خاطئ
       totalKwh += diff;
       const start = new Date(prev.dateISO), end = new Date(cur.dateISO);
       const days = Math.max(1, (end - start) / 86400000);
@@ -340,7 +343,13 @@
     return {totalKwh, totalPaid, balance, perMonth};
   }
 
-  // ====== Helpers for instant calc ======
+  // ====== Baseline helpers & instant calc ======
+  function getEarliestReadingId(){
+    if(!model.readings.length) return null;
+    const rs = [...model.readings].sort((a,b)=> a.dateISO.localeCompare(b.dateISO));
+    return rs[0]?.id || null;
+  }
+
   function lastReadingBefore(dateISO){
     const rs = [...model.readings].sort((a,b)=> a.dateISO.localeCompare(b.dateISO));
     for(let i=rs.length-1; i>=0; i--){
@@ -349,37 +358,68 @@
     return rs.length ? rs[rs.length-1] : null;
   }
 
-  function previewPaymentForCurrentInput(){
+  function computeInstant(){
     const dateISO = $('#readDate').value || new Date().toISOString().slice(0,10);
     const valStr = $('#readValue').value;
-    const instantPay = $('#instantPay');
-    const instantInfo = $('#instantInfo');
     const t = store.tariff();
+    if(!valStr) return {ok:false, reason:'no_value'};
 
-    if(!valStr){
-      instantPay.textContent = '—';
-      instantInfo.textContent = 'أدخل قراءة وتاريخاً لنحسب المطلوب فوراً.';
-      return;
-    }
     const currentVal = Number(valStr);
     const prev = lastReadingBefore(dateISO);
 
     if(!prev){
-      instantPay.textContent = '—';
-      instantInfo.textContent = 'هذه أول قراءة — لا توجد قراءة سابقة للمقارنة.';
-      return;
+      // لا يوجد أي قراءة سابقة => هذه ستكون مرجعية
+      return {ok:false, reason:'no_prev'};
     }
 
     const diff = currentVal - Number(prev.valueKwh);
     if(diff < 0){
-      instantPay.textContent = 'قراءة أقل من السابقة';
-      instantInfo.textContent = `القراءة السابقة كانت ${fmtPlain(prev.valueKwh)} ك.و.س بتاريخ ${new Date(prev.dateISO).toLocaleDateString('ar-EG')}.`;
-      return;
+      return {ok:false, reason:'negative', prev};
     }
 
     const cost = diff * t;
-    instantPay.textContent = `لازم تدفع ${fmtMoneyAbs(cost)} وهي قيمة ${fmtPlain(diff)} ك.و.س`;
-    instantInfo.textContent = `من ${new Date(prev.dateISO).toLocaleDateString('ar-EG')} حتى ${new Date(dateISO).toLocaleDateString('ar-EG')} بسعر ${t} ₪/ك.و.س`;
+    return {ok:true, diff, cost, prev, dateISO, tariff:t};
+  }
+
+  function previewPaymentForCurrentInput(){
+    const instantPay = $('#instantPay');
+    const instantInfo = $('#instantInfo');
+    const btnAddInstant = $('#addInstantPayment');
+
+    const res = computeInstant();
+    btnAddInstant.disabled = true;
+
+    if(!res.ok){
+      if(res.reason==='no_value'){
+        instantPay.textContent = '—';
+        instantInfo.textContent = 'أدخل قراءة وتاريخاً لنحسب المطلوب فوراً.';
+      } else if(res.reason==='no_prev'){
+        instantPay.textContent = 'هذه أول قراءة — مرجعية';
+        instantInfo.textContent = 'لن تُحسب أي كلفة حتى تسجّل القراءة التالية.';
+      } else if(res.reason==='negative'){
+        instantPay.textContent = 'قراءة أقل من السابقة';
+        instantInfo.textContent = `القراءة السابقة كانت ${fmtPlain(res.prev.valueKwh)} ك.و.س بتاريخ ${new Date(res.prev.dateISO).toLocaleDateString('ar-EG')}.`;
+      }
+      return;
+    }
+
+    instantPay.textContent = `لازم تدفع ${fmtMoneyAbs(res.cost)} وهي قيمة ${fmtPlain(res.diff)} ك.و.س`;
+    instantInfo.textContent = `من ${new Date(res.prev.dateISO).toLocaleDateString('ar-EG')} حتى ${new Date(res.dateISO).toLocaleDateString('ar-EG')} بسعر ${res.tariff} ₪/ك.و.س`;
+    btnAddInstant.disabled = false;
+  }
+
+  async function addInstantPaymentNow(){
+    const res = computeInstant();
+    if(!res.ok){ notify('لا يمكن إضافة الدفعة الآن','err'); return; }
+    const amount = Number(res.cost.toFixed(2));
+    const dateISO = new Date().toISOString().slice(0,10); // تاريخ اليوم
+    const addRes = await jsonp({action:'addPayment', dateISO, amount});
+    if(addRes.ok){
+      notify(`أُضيفت دفعة ${fmtMoneyAbs(amount)}`);
+      refresh();
+    }else{
+      notify('تعذّر إضافة الدفعة','err');
+    }
   }
 
   // ====== Render ======
@@ -398,6 +438,8 @@
     $('#monthCost').textContent = fmtPlain(cost) + ' ₪';
     $('#monthInfo').textContent = `استهلاك ${fmtPlain(m.kwh)} ك.و.س · دفعات ${fmtPlain(m.paid)} ₪`;
 
+    const baselineId = getEarliestReadingId();
+
     const items = [
       ...readings.map(r=> ({date:r.dateISO, t:'reading', a:r})),
       ...payments.map(p=> ({date:p.dateISO, t:'payment', a:p}))
@@ -408,7 +450,15 @@
     items.forEach(item=>{
       const tr = document.createElement('tr'); tr.className='fade-in';
       const date = new Date(item.date).toLocaleDateString('ar-EG');
-      const type = item.t==='reading'? '<span class="tag read">قراءة</span>' : '<span class="tag pay">دفعة</span>';
+      let type;
+      if(item.t==='reading'){
+        const isBaseline = item.a.id === baselineId;
+        type = isBaseline
+          ? '<span class="tag baseline">مرجعية</span>'
+          : '<span class="tag read">قراءة</span>';
+      }else{
+        type = '<span class="tag pay">دفعة</span>';
+      }
       const val = item.t==='reading'? fmtPlain(item.a.valueKwh)+' ك.و.س' : fmtPlain(item.a.amount)+' ₪';
       tr.innerHTML = `<td>${date}</td><td>${type}</td><td>${val}</td><td style="color:var(--muted)">${item.a.id?.slice(0,8) || ''}</td>`;
       tbody.appendChild(tr);
@@ -435,11 +485,19 @@
     const valueKwh = $('#readValue').value; if(!valueKwh){ notify('أدخلي قراءة صحيحة','err'); return; }
     const res = await jsonp({action:'addReading', dateISO, valueKwh});
     if(res.ok){
+      // بعد إضافة القراءة: إن وُجد فرق مع السابقة نحسبه ونظهر إشعارًا
+      const prev = lastReadingBefore(dateISO);
       notify('تمت إضافة القراءة');
       $('#readValue').value='';
-      refresh();
+      await refresh();
+      // بعد التحديث، أعرض اقتراح إضافة دفعة بالقيمة المحسوبة (إذا أمكن)
+      const instant = computeInstant();
+      if(instant.ok && instant.diff>0){
+        notify(`الفترة الأخيرة: ${fmtPlain(instant.diff)} ك.و.س ⇒ ${fmtMoneyAbs(instant.cost)}`);
+      }
     } else notify('تعذر الإضافة','err');
   }
+
   async function addPayment(){
     const dateISO = $('#payDate').value || new Date().toISOString().slice(0,10);
     const amount = $('#payAmount').value; if(!amount){ notify('أدخلي مبلغاً صحيحاً','err'); return; }
@@ -460,7 +518,7 @@
     reader.onload = async ()=>{
       try{
         const data = JSON.parse(reader.result);
-        if(CONFIG.GAS_URL){ notify('استيراد محلي (Mock). للتجميعي عبر GAS نوفر لاحقاً','err'); }
+        if(CONFIG.GAS_URL){ notify('استيراد محلي (Mock). للتجميعي عبر GAS لاحقاً','err'); }
         localStorage.setItem('e_calc_mock_v1', JSON.stringify({readings:data.readings||[], payments:data.payments||[]}));
         if(data.tariff) store.setTariff(data.tariff);
         await refresh();
@@ -476,6 +534,7 @@
     await jsonp({action:'setTariff', tariff: t});
     notify('تم حفظ السعر');
     renderAll(model);
+    previewPaymentForCurrentInput();
   }
 
   // ============= Init =============
@@ -496,11 +555,12 @@
     $('#saveGasUrl').addEventListener('click', saveGasUrl);
     syncGasUrlUI();
 
-    // الحسبة الفورية عند الكتابة/تغيير التاريخ/السعر
+    // الحسبة الفورية + زر إضافة الدفعة الآن
     $('#readValue').addEventListener('input', previewPaymentForCurrentInput);
     $('#readDate').addEventListener('change', previewPaymentForCurrentInput);
     $('#tariff').addEventListener('input', previewPaymentForCurrentInput);
     $('#calcNow').addEventListener('click', previewPaymentForCurrentInput);
+    $('#addInstantPayment').addEventListener('click', addInstantPaymentNow);
 
     refresh();
   })();
