@@ -17,7 +17,7 @@
       --focus: 0 0 0 3px color-mix(in oklab, var(--primary) 35%, transparent);
       --gradient: linear-gradient(135deg, color-mix(in oklab, var(--primary) 55%, transparent), color-mix(in oklab, var(--accent) 55%, transparent));
     }
-    /* 9 modern themes (toggle via [data-theme]) */
+    /* 9 modern themes */
     [data-theme="ocean"]{--bg:#0b1420;--card:#0f1b2b;--primary:#58b7ff;--accent:#9bf6ff;}
     [data-theme="forest"]{--bg:#0e1412;--card:#141b19;--primary:#4ade80;--accent:#9be7c4;}
     [data-theme="sunset"]{--bg:#1b1117;--card:#22151b;--primary:#ff8ba7;--accent:#ffd6a5;}
@@ -80,7 +80,7 @@
 
     .footer{opacity:.75;font-size:13px;margin-top:24px;text-align:center;color:var(--muted)}
     .hr{height:1px;background:linear-gradient(90deg, transparent, color-mix(in oklab, var(--fg) 14%, transparent), transparent);margin:10px 0 16px}
- </style>
+  </style>
 </head>
 <body data-theme="ocean">
   <div class="container">
@@ -107,17 +107,19 @@
             <option value="violet">Violet</option>
           </select>
         </div>
-        <!-- إضافة إدخال رابط GAS -->
-        <div class="field" style="min-width:250px">
+        <!-- GAS URL input (with default) -->
+        <div class="field" style="min-width:270px">
           <label>رابط Google Apps Script</label>
           <input type="url" id="gasUrlInput" class="input" placeholder="https://script.google.com/.../exec" />
         </div>
-        <button class="btn btn-ghost" id="saveGasUrl">حفظ الرابط</button>
+        <button class="btn btn-ghost" id="saveGasUrl" title="حفظ رابط GAS">حفظ الرابط</button>
         <button class="btn btn-ghost" id="exportBtn" title="تصدير JSON">تصدير</button>
         <label class="btn btn-ghost" for="importFile" title="استيراد JSON">استيراد<input id="importFile" type="file" accept="application/json" hidden></label>
       </div>
     </header>
-Left: Forms & Summary ===== -->
+
+    <div class="grid">
+      <!-- ===== Left: Forms & Summary ===== -->
       <section class="card slide-in">
         <h3>إضافة قراءة أو دفعة</h3>
         <div class="row">
@@ -169,7 +171,8 @@ Left: Forms & Summary ===== -->
           </div>
         </div>
       </section>
-<!-- ===== Right: Quick Stats ===== -->
+
+      <!-- ===== Right: Quick Stats ===== -->
       <aside class="card fade-in">
         <h3>سريع</h3>
         <div class="row" style="gap:10px">
@@ -197,12 +200,17 @@ Left: Forms & Summary ===== -->
     </section>
 
     <div class="footer">يعمل من GitHub Pages ✦ التخزين على Google Sheets عبر GAS ✦ JSONP لتجاوز CORS</div>
-<script>
+  </div>
+
+  <script>
   // ================== CONFIG ==================
+  // ضعِ رابط GAS الافتراضي هنا ليشتغل تلقائياً على أي جهاز (يمكن تغييره من الواجهة)
+  const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbxqWiRA85iGHzYJsRokVATL-zUOc2sLBMlNL7b6ZAUiQtzu-I5Qd-93BAOz87BoH9Cz/exec"; // مثال: https://script.google.com/macros/s/XXXXXXXX/exec
   const CONFIG = {
-    GAS_URL: localStorage.getItem('GAS_URL') || '',
+    GAS_URL: (localStorage.getItem('GAS_URL') && localStorage.getItem('GAS_URL') !== 'null') ? localStorage.getItem('GAS_URL') : DEFAULT_GAS_URL,
     JSONP_CALLBACK_PREFIX: '__ecb_',
   };
+
   // ============= Utilities =============
   const $ = (s)=>document.querySelector(s);
   const fmt = new Intl.NumberFormat('ar-EG', {maximumFractionDigits:2});
@@ -225,15 +233,31 @@ Left: Forms & Summary ===== -->
     document.body.appendChild(n); setTimeout(()=>n.remove(), 2200);
   }
 
+  // ===== Bind GAS URL input
+  function syncGasUrlUI(){
+    const input = $('#gasUrlInput');
+    input.value = CONFIG.GAS_URL || '';
+  }
+  function saveGasUrl(){
+    const val = $('#gasUrlInput').value.trim();
+    if(val && val.startsWith('http')){
+      localStorage.setItem('GAS_URL', val);
+      CONFIG.GAS_URL = val;
+      notify('تم حفظ رابط GAS');
+      refresh();
+    }else{
+      notify('الرجاء إدخال رابط GAS صالح','err');
+    }
+  }
+
   // JSONP call (CORS-less)
   let cbCounter = 0;
   function jsonp(params){
     return new Promise((resolve,reject)=>{
-      if(!CONFIG.GAS_URL){
-        // Dev fallback: keep local mirror in localStorage
-        try{
-          const res = localDevMock(params); resolve(res); return;
-        }catch(err){ reject(err); return; }
+      if(!CONFIG.GAS_URL || CONFIG.GAS_URL === 'PUT_YOUR_GAS_EXEC_URL_HERE'){
+        // Dev fallback: local mock
+        try{ const res = localDevMock(params); resolve(res); return; }
+        catch(err){ reject(err); return; }
       }
       const cbName = CONFIG.JSONP_CALLBACK_PREFIX + (++cbCounter) + '_' + Date.now();
       window[cbName] = (payload)=>{ resolve(payload); cleanup(); };
@@ -242,10 +266,10 @@ Left: Forms & Summary ===== -->
       Object.entries({...params, callback: cbName}).forEach(([k,v])=> url.searchParams.append(k, v));
       const script = document.createElement('script'); script.src = url.toString(); script.onerror = ()=>{ reject(new Error('JSONP failed')); cleanup(); };
       document.body.appendChild(script);
-      // safety timeout
       setTimeout(()=>{ if(window[cbName]){ reject(new Error('Timeout')); cleanup(); } }, 12000);
     });
   }
+
   // Local dev mock (no GAS)
   function localDevMock(p){
     const key = 'e_calc_mock_v1';
@@ -274,17 +298,14 @@ Left: Forms & Summary ===== -->
 
   // ====== Domain Logic ======
   function compute(readings, payments, tariff){
-    // sort readings by date
     const rs = [...readings].sort((a,b)=> a.dateISO.localeCompare(b.dateISO));
     const ps = [...payments].sort((a,b)=> a.dateISO.localeCompare(b.dateISO));
-    // compute consumption per period
     let totalKwh = 0; const perMonth = new Map();
     for(let i=1;i<rs.length;i++){
       const prev = rs[i-1], cur = rs[i];
       const diff = Number(cur.valueKwh) - Number(prev.valueKwh);
-      if(diff < 0) continue; // skip invalid
+      if(diff < 0) continue;
       totalKwh += diff;
-      // spread to months proportionally by days
       const start = new Date(prev.dateISO), end = new Date(cur.dateISO);
       const days = Math.max(1, (end - start) / 86400000);
       for(let d=new Date(start); d<end; d = new Date(d.getTime()+86400000)){
@@ -294,7 +315,6 @@ Left: Forms & Summary ===== -->
         m.kwh += dayShare; perMonth.set(key, m);
       }
     }
-    // payments per month
     ps.forEach(p=>{
       const d = new Date(p.dateISO);
       const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
@@ -302,7 +322,6 @@ Left: Forms & Summary ===== -->
       m.paid += Number(p.amount); perMonth.set(key, m);
     });
 
-    // totals
     const totalCost = totalKwh * tariff;
     const totalPaid = ps.reduce((s,p)=> s + Number(p.amount), 0);
     const balance = totalPaid - totalCost;
@@ -315,20 +334,17 @@ Left: Forms & Summary ===== -->
     const {readings, payments, tariff} = model;
     const s = compute(readings, payments, tariff);
 
-    // Quick stats
     $('#totalKwh').textContent = fmtPlain(s.totalKwh);
     $('#totalPaid').textContent = fmtPlain(s.totalPaid);
     const bal = s.balance; $('#balance').textContent = fmtMoney(bal);
     $('#balance').style.color = bal>=0? 'var(--ok)': 'var(--danger)';
 
-    // Month summary (current month)
     const now = new Date(); const key = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
     const m = s.perMonth.get(key) || {kwh:0, paid:0};
     const cost = m.kwh * tariff;
     $('#monthCost').textContent = fmtPlain(cost) + ' ₪';
     $('#monthInfo').textContent = `استهلاك ${fmtPlain(m.kwh)} ك.و.س · دفعات ${fmtPlain(m.paid)} ₪`;
 
-    // Log table
     const items = [
       ...readings.map(r=> ({date:r.dateISO, t:'reading', a:r})),
       ...payments.map(p=> ({date:p.dateISO, t:'payment', a:p}))
@@ -346,7 +362,7 @@ Left: Forms & Summary ===== -->
     })
   }
 
-  // ====== Model (loaded from GAS) ======
+  // ====== Model ======
   const model = { readings: [], payments: [], tariff: store.tariff() };
 
   async function refresh(){
@@ -384,10 +400,7 @@ Left: Forms & Summary ===== -->
     const reader = new FileReader();
     reader.onload = async ()=>{
       try{ const data = JSON.parse(reader.result);
-        // Bulk import locally (dev). In production you may add GAS bulk endpoints.
-        if(CONFIG.GAS_URL){
-          notify('يُنصح بالاستيراد عبر GAS (غير مفعّل كتجميعي)، سيتم تحميل محلي فقط','err');
-        }
+        if(CONFIG.GAS_URL){ notify('استيراد محلي (Mock). للتجميعي عبر GAS نوفر لاحقاً','err'); }
         localStorage.setItem('e_calc_mock_v1', JSON.stringify({readings:data.readings||[], payments:data.payments||[]}));
         if(data.tariff) store.setTariff(data.tariff);
         await refresh();
@@ -396,13 +409,10 @@ Left: Forms & Summary ===== -->
     reader.readAsText(file);
   }
 
-  // Theme handling
+  // Theme handling & events
   function applyTheme(t){ document.body.setAttribute('data-theme', t); store.setTheme(t); }
-
-  // Tariff save (local hint + optional GAS setting)
   async function saveTariff(){
     const t = Number($('#tariff').value || 0.67); store.setTariff(t);
-    // Optional remote store (ignored in mock)
     await jsonp({action:'setTariff', tariff: t});
     notify('تم حفظ السعر'); renderAll(model);
   }
@@ -421,31 +431,12 @@ Left: Forms & Summary ===== -->
     $('#importFile').addEventListener('change', (e)=> e.target.files[0] && importJSON(e.target.files[0]));
     $('#saveTariff').addEventListener('click', saveTariff);
 
-    // Hint: save GAS_URL interactively (press g)
-    window.addEventListener('keydown', (e)=>{
-      if(e.key.toLowerCase()==='g' && (e.ctrlKey||e.metaKey)){
-        const url = prompt('ضع رابط الويب‑أب من Google Apps Script (ينتهي بـ /exec):', CONFIG.GAS_URL || '');
-        if(url){ localStorage.setItem('GAS_URL', url); CONFIG.GAS_URL = url; refresh(); }
-  // تحديث حقل الرابط عند التحميل
-  document.addEventListener('DOMContentLoaded', () => {
-    const input = document.getElementById('gasUrlInput');
-    input.value = CONFIG.GAS_URL || '';
-    document.getElementById('saveGasUrl').addEventListener('click', () => {
-      const val = input.value.trim();
-      if (val && val.startsWith('http')) {
-        localStorage.setItem('GAS_URL', val);
-        CONFIG.GAS_URL = val;
-        alert('تم حفظ رابط GAS بنجاح!');
-      } else {
-        alert('الرجاء إدخال رابط GAS صحيح.');
-      }
-    });
+    // GAS URL UI
+    $('#saveGasUrl').addEventListener('click', saveGasUrl);
+    syncGasUrlUI();
+
     refresh();
   })();
-  });
-
-  // باقي السكربتات كما هي (الوظائف السابقة)...
   </script>
 </body>
 </html>
-
