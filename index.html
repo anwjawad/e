@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>e-calc | كهربا شهرية</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,11 +30,15 @@
 
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;font-family:"Cairo", system-ui, -apple-system, Segoe UI; background:var(--bg); color:var(--fg);}
+    body{
+      margin:0;font-family:"Cairo", system-ui, -apple-system, Segoe UI;
+      background:var(--bg); color:var(--fg);
+      -webkit-tap-highlight-color: transparent;
+    }
 
     /* Layout */
     .container{max-width:1100px;margin-inline:auto;padding:24px;}
-    header{display:flex;gap:var(--gap);align-items:center;justify-content:space-between;margin-bottom:var(--gap-lg)}
+    header{display:flex;gap:var(--gap);align-items:center;justify-content:space-between;margin-bottom:var(--gap-lg);flex-wrap:wrap}
     .brand{display:flex;align-items:center;gap:12px}
     .logo{width:40px;height:40px;border-radius:12px;background:var(--gradient);box-shadow:var(--shadow)}
     .title h1{margin:0;font-size:22px}
@@ -51,10 +55,21 @@
     label{font-size:14px;color:var(--muted)}
     input,select,button,textarea{font-family:inherit;font-size:16px}
     .field{display:flex;flex-direction:column;gap:6px;flex:1 1 180px}
-    .input{padding:12px 14px;border-radius:12px;border:1px solid color-mix(in oklab, var(--fg) 12%, transparent);background:transparent;color:var(--fg);outline:none;transition:all .2s}
+    .input{
+      padding:14px 16px;border-radius:12px;
+      border:1px solid color-mix(in oklab, var(--fg) 12%, transparent);
+      background:transparent;color:var(--fg);outline:none;transition:all .2s;
+      min-height:48px; /* لمس أسهل */
+    }
     .input:focus{box-shadow:var(--focus);border-color:color-mix(in oklab, var(--primary) 60%, transparent)}
+    .input[type="number"]::-webkit-outer-spin-button,
+    .input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
 
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;border-radius:14px;border:1px solid transparent;cursor:pointer;transition:transform .08s ease, box-shadow .2s, background .3s}
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      padding:14px 18px;border-radius:14px;border:1px solid transparent;cursor:pointer;
+      transition:transform .08s ease, box-shadow .2s, background .3s; min-height:48px
+    }
     .btn:active{transform:translateY(1px)}
     .btn-primary{background:var(--primary);color:#0b0b0c}
     .btn-ghost{background:transparent;border-color:color-mix(in oklab, var(--fg) 12%, transparent);color:var(--fg)}
@@ -82,6 +97,18 @@
 
     .footer{opacity:.75;font-size:13px;margin-top:24px;text-align:center;color:var(--muted)}
     .hr{height:1px;background:linear-gradient(90deg, transparent, color-mix(in oklab, var(--fg) 14%, transparent), transparent);margin:10px 0 16px}
+
+    /* ===== Mobile tweaks ===== */
+    @media (max-width:520px){
+      .container{padding:14px}
+      header{gap:10px}
+      .title h1{font-size:18px}
+      .row{gap:10px}
+      .btn,.input{width:100%}
+      .field{flex:1 1 100%}
+      .brand .logo{width:34px;height:34px}
+      .card{padding:14px}
+    }
   </style>
 </head>
 <body data-theme="ocean">
@@ -127,24 +154,29 @@
         <div class="row">
           <div class="field">
             <label>تاريخ القراءة</label>
-            <input type="date" id="readDate" class="input">
+            <input type="date" id="readDate" class="input" autocomplete="off">
           </div>
           <div class="field">
             <label>قراءة العداد (ك.و.س)</label>
-            <input type="number" step="0.01" id="readValue" class="input" placeholder="مثال: 7000 أو 12543.7">
+            <input type="number" step="0.01" inputmode="decimal" id="readValue" class="input" placeholder="مثال: 7000 أو 12543.7" autocomplete="off">
             <small style="color:var(--muted)">* أول قراءة مرجعية: لا تُحسب كلفة، هي نقطة البداية.</small>
           </div>
           <div class="field" style="align-self:end">
-            <button id="addReading" class="btn btn-primary">إضافة قراءة فقط</button>
+            <button id="addReading" class="btn btn-ghost">إضافة قراءة فقط</button>
           </div>
         </div>
 
-        <!-- === الحسبة الفورية + زر موحد للقراءة والدفعة === -->
+        <!-- === الحسبة الفورية + زر موحد للقراءة والدفعة (بدفعة مخصّصة) === -->
         <div class="row">
           <div class="field" style="flex:2">
             <label>الحسبة الفورية (من آخر قراءة مُسجلة)</label>
             <div class="pill" id="instantPay">—</div>
-            <small id="instantInfo" style="color:var(--muted)">أدخل قراءة وتاريخاً لنحسب المطلوب فوراً.</small>
+            <small id="instantInfo" style="color:var(--muted)">أدخل قراءة وتاريخاً لنحسب المطلوب فوراً. يمكنك أيضاً وضع دفعة مخصّصة.</small>
+          </div>
+          <div class="field">
+            <label>مبلغ الدفعة المخصّصة (اختياري)</label>
+            <input type="number" step="0.01" inputmode="decimal" id="customInstantAmount" class="input" placeholder="مثال: 150">
+            <small style="color:var(--muted)">لو تركته فارغاً، تُستخدم قيمة الحسبة.</small>
           </div>
           <div class="field" style="align-self:end;max-width:260px;gap:8px">
             <button id="calcNow" class="btn btn-ghost" title="احسبي الآن">احسبي الآن</button>
@@ -156,14 +188,14 @@
         <div class="row">
           <div class="field">
             <label>تاريخ الدفعة</label>
-            <input type="date" id="payDate" class="input">
+            <input type="date" id="payDate" class="input" autocomplete="off">
           </div>
           <div class="field">
             <label>مبلغ الدفعة (شيكل)</label>
-            <input type="number" step="0.01" id="payAmount" class="input" placeholder="مثال: 200">
+            <input type="number" step="0.01" inputmode="decimal" id="payAmount" class="input" placeholder="مثال: 200" autocomplete="off">
           </div>
           <div class="field" style="align-self:end">
-            <button id="addPayment" class="btn btn-primary">إضافة دفعة فقط</button>
+            <button id="addPayment" class="btn btn-ghost">إضافة دفعة فقط</button>
           </div>
         </div>
 
@@ -182,7 +214,7 @@
           <div style="flex:1"></div>
           <div class="field" style="max-width:220px">
             <label>سعر الكيلو (شيكل)</label>
-            <input type="number" step="0.0001" id="tariff" class="input" value="0.67">
+            <input type="number" step="0.0001" inputmode="decimal" id="tariff" class="input" value="0.67">
           </div>
           <div class="field" style="align-self:end">
             <button id="saveTariff" class="btn btn-ghost">حفظ السعر</button>
@@ -243,6 +275,8 @@
     theme: ()=> localStorage.getItem('theme') || 'ocean',
     setTheme: (t)=> localStorage.setItem('theme', t)
   };
+
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
 
   function notify(msg, kind='ok'){
     const n = document.createElement('div');
@@ -322,9 +356,7 @@
 
   // ====== Domain Logic ======
   function buildLedger(readings, payments, tariff){
-    // Group by date (YYYY-MM-DD)
     const map = new Map();
-    // keep earliest reading as baseline (no cost)
     const rs = [...readings].sort((a,b)=> a.dateISO.localeCompare(b.dateISO));
     const ps = [...payments].sort((a,b)=> a.dateISO.localeCompare(b.dateISO));
 
@@ -351,14 +383,12 @@
       let prevVal = lastReading ? Number(lastReading.valueKwh) : null;
       let curVal = entry.hasReading ? Number(entry.reading.valueKwh) : null;
 
-      // required cost only if we have previous reading and a new reading today (non-baseline)
       let required = 0;
       if(entry.hasReading && lastReading && entry.reading.id !== lastReading.id){
         const diff = curVal - prevVal;
         required = diff > 0 ? diff * tariff : 0;
       }
 
-      // update balance: add payments then subtract required (order doesn't matter for final)
       balance = balance + (entry.paid || 0) - required;
 
       rows.push({
@@ -375,7 +405,6 @@
       }
     });
 
-    // totals for quick stats
     const totalKwh = rs.length > 1
       ? rs.slice(1).reduce((s,r,i)=> s + Math.max(0, r.valueKwh - rs[i].valueKwh), 0)
       : 0;
@@ -394,15 +423,16 @@
   }
 
   function computeInstant(){
-    const dateISO = $('#readDate').value || new Date().toISOString().slice(0,10);
+    const dateISO = $('#readDate').value || todayISO();
     const valStr = $('#readValue').value;
     const t = store.tariff();
     if(!valStr) return {ok:false, reason:'no_value'};
     const currentVal = Number(valStr);
     const prev = lastReadingBefore(dateISO);
 
-    if(!prev){ // baseline case
-      return {ok:false, reason:'no_prev'};
+    // لا يوجد قراءة سابقة: نسمح بالإضافة (ستكون مرجعية)، والكلفة 0
+    if(!prev){
+      return {ok:true, diff:0, cost:0, prev:null, dateISO, currentVal, tariff:t, baseline:true};
     }
 
     const diff = currentVal - Number(prev.valueKwh);
@@ -426,9 +456,6 @@
       if(res.reason==='no_value'){
         instantPay.textContent = '—';
         instantInfo.textContent = 'أدخل قراءة وتاريخاً لنحسب المطلوب فوراً.';
-      } else if(res.reason==='no_prev'){
-        instantPay.textContent = 'هذه أول قراءة — مرجعية (لا كلفة).';
-        instantInfo.textContent = 'لن تُحسب أي كلفة حتى تسجّل القراءة التالية.';
       } else if(res.reason==='negative'){
         instantPay.textContent = 'قراءة أقل من السابقة';
         instantInfo.textContent = `القراءة السابقة كانت ${fmtPlain(res.prev.valueKwh)} ك.و.س بتاريخ ${new Date(res.prev.dateISO).toLocaleDateString('ar-EG')}.`;
@@ -436,7 +463,22 @@
       return;
     }
 
-    instantPay.textContent = `لازم تدفع ${fmtMoneyAbs(res.cost)} ₪ وهي قيمة ${fmtPlain(res.diff)} ك.و.س`;
+    const custom = Number($('#customInstantAmount').value || NaN);
+    const usingCustom = Number.isFinite(custom) && custom >= 0;
+
+    if(res.baseline){
+      instantPay.textContent = usingCustom
+        ? `أول قراءة مرجعية. سيتم دفع ${fmtMoneyAbs(custom)} ₪ كدفعة مخصّصة.`
+        : 'أول قراءة مرجعية (لا كلفة). يمكنك إدخال دفعة مخصّصة.';
+      instantInfo.textContent = `تاريخ القراءة ${new Date(res.dateISO).toLocaleDateString('ar-EG')} بسعر ${res.tariff} ₪/ك.و.س`;
+      btnAddInstant.disabled = false; // نسمح بالإضافة حتى بدون كلفة
+      return;
+    }
+
+    const cost = res.cost;
+    instantPay.textContent = usingCustom
+      ? `الكلفة المحسوبة ${fmtMoneyAbs(cost)} ₪، وسيُسجَّل دفع ${fmtMoneyAbs(custom)} ₪.`
+      : `لازم تدفع ${fmtMoneyAbs(cost)} ₪ وهي قيمة ${fmtPlain(res.diff)} ك.و.س`;
     instantInfo.textContent = `من ${new Date(res.prev.dateISO).toLocaleDateString('ar-EG')} إلى ${new Date(res.dateISO).toLocaleDateString('ar-EG')} بسعر ${res.tariff} ₪/ك.و.س`;
     btnAddInstant.disabled = false;
   }
@@ -446,18 +488,14 @@
     const {readings, payments} = model;
     const s = buildLedger(readings, payments, store.tariff());
 
-    // quick stats
     $('#totalKwh').textContent = fmtPlain(s.totalKwh);
     $('#totalPaid').textContent = fmtPlain(s.totalPaid);
     $('#balance').textContent = fmtMoney(s.balance);
     $('#balance').style.color = s.balance>=0? 'var(--ok)': 'var(--danger)';
 
-    // month summary (approx via per ledger)
-    // (اختصاراً نعرض الرصيد الحالي فقط في الملخص)
     $('#monthCost').textContent = fmtPlain(Math.max(0, -s.balance)) + ' ₪';
     $('#monthInfo').textContent = `دفعات ${fmtPlain(s.totalPaid)} ₪ · رصيد ${fmtPlain(s.balance)} ₪`;
 
-    // ledger table
     const tbody = $('#logBody');
     tbody.innerHTML = '';
     s.rows.sort((a,b)=> b.date.localeCompare(a.date)).forEach(row=>{
@@ -474,7 +512,6 @@
       tbody.appendChild(tr);
     });
 
-    // update instant preview
     previewPaymentForCurrentInput();
   }
 
@@ -482,73 +519,89 @@
   const model = { readings: [], payments: [], tariff: store.tariff() };
 
   async function refresh(){
-    const res = await jsonp({action:'listAll'});
-    if(!res.ok){ notify('فشل التحميل', 'err'); return; }
-    model.readings = res.readings || [];
-    model.payments = res.payments || [];
-    model.tariff = store.tariff();
-    renderAll(model);
+    try{
+      const res = await jsonp({action:'listAll'});
+      if(!res.ok){ notify('فشل التحميل', 'err'); return; }
+      model.readings = res.readings || [];
+      model.payments = res.payments || [];
+      model.tariff = store.tariff();
+      renderAll(model);
+    }catch(e){
+      notify('فشل الاتصال. سيتم استخدام البيانات المحلية إن وُجدت.','err');
+    }
   }
 
   async function addReading(){
     const btn = $('#addReading');
-    const dateISO = $('#readDate').value || new Date().toISOString().slice(0,10);
+    const dateISO = $('#readDate').value || todayISO();
     const valueKwh = $('#readValue').value; if(!valueKwh){ notify('أدخلي قراءة صحيحة','err'); return; }
     setLoading(btn, true);
-    const res = await jsonp({action:'addReading', dateISO, valueKwh});
-    setLoading(btn, false);
-    if(res.ok){
-      notify('تمت إضافة القراءة');
-      $('#readValue').value='';
-      refresh();
-    } else notify('تعذر الإضافة','err');
+    try{
+      const res = await jsonp({action:'addReading', dateISO, valueKwh});
+      if(res.ok){
+        notify('تمت إضافة القراءة');
+        $('#readValue').value='';
+        refresh();
+      } else notify('تعذر الإضافة','err');
+    } finally {
+      setLoading(btn, false);
+    }
   }
 
   async function addPayment(){
     const btn = $('#addPayment');
-    const dateISO = $('#payDate').value || new Date().toISOString().slice(0,10);
-    const amount = $('#payAmount').value; if(!amount){ notify('أدخلي مبلغاً صحيحاً','err'); return; }
+    const dateISO = $('#payDate').value || todayISO();
+    const amount = $('#payAmount').value; if(amount==='' || isNaN(Number(amount))){ notify('أدخلي مبلغاً صحيحاً','err'); return; }
     setLoading(btn, true);
-    const res = await jsonp({action:'addPayment', dateISO, amount});
-    setLoading(btn, false);
-    if(res.ok){ notify('تمت إضافة الدفعة'); $('#payAmount').value=''; refresh(); }
-    else notify('تعذر الإضافة','err');
+    try{
+      const res = await jsonp({action:'addPayment', dateISO, amount});
+      if(res.ok){ notify('تمت إضافة الدفعة'); $('#payAmount').value=''; refresh(); }
+      else notify('تعذر الإضافة','err');
+    } finally {
+      setLoading(btn, false);
+    }
   }
 
-  // زر موحّد: إضافة القراءة والدفعة الآن (بنفس القيمة)
+  // زر موحّد: إضافة القراءة والدفعة (قد تكون مخصّصة)
   async function addInstantPaymentNow(){
     const btn = $('#addInstantPayment');
     const res = computeInstant();
-    if(!res.ok){ notify('لا يمكن إضافة القراءة والدفعة الآن','err'); return; }
+    if(!res.ok){
+      if(res.reason==='no_value'){ notify('أدخلي قيمة قراءة صحيحة','err'); }
+      else if(res.reason==='negative'){ notify('القيمة أقل من القراءة السابقة','err'); }
+      return;
+    }
 
-    const readingDate = res.dateISO;          // تاريخ القراءة المُدخل
-    const readingVal  = res.currentVal;       // قيمة القراءة الحالية
-    const payDate     = res.dateISO;          // نستخدم نفس تاريخ القراءة للصف الواحد
-    const amount      = Number(res.cost.toFixed(2));
+    const readingDate = res.dateISO;
+    const readingVal  = res.currentVal;
+    const payDate     = res.dateISO;
 
-    // تحديث متفائل + تنفيذ متوازي لتقليل الوقت
+    // المبلغ: إن وُجد مخصّص نأخذه، وإلا نأخذ المحسوب (قد يكون 0 في حالة baseline)
+    const custom = Number($('#customInstantAmount').value || NaN);
+    const amount = Number.isFinite(custom) && custom >= 0 ? Number(custom.toFixed(2)) : Number((res.cost || 0).toFixed(2));
+
     setLoading(btn, true);
-    // نطلق الطلبين معاً
-    const [r1, r2] = await Promise.allSettled([
-      jsonp({action:'addReading', dateISO: readingDate, valueKwh: readingVal}),
-      jsonp({action:'addPayment', dateISO: payDate, amount })
-    ]);
-    setLoading(btn, false);
+    try{
+      const [r1, r2] = await Promise.allSettled([
+        jsonp({action:'addReading', dateISO: readingDate, valueKwh: readingVal}),
+        jsonp({action:'addPayment', dateISO: payDate, amount })
+      ]);
 
-    const ok1 = r1.status==='fulfilled' && r1.value?.ok;
-    const ok2 = r2.status==='fulfilled' && r2.value?.ok;
+      const ok1 = r1.status==='fulfilled' && r1.value?.ok;
+      const ok2 = r2.status==='fulfilled' && r2.value?.ok;
 
-    if(ok1 && ok2){
-      notify(`أُضيفت قراءة ${fmtPlain(readingVal)} ودفعة ${fmtPlain(amount)} ₪`);
-      // تفريغ الحقول
-      // ملاحظة: لا نفرّغ التاريخ حتى يُبقي المستخدم على نفس اليوم إن أراد
-      // $('#readDate').value = ''; 
-      $('#readValue').value = '';
-      await refresh();
-    }else{
-      notify('تعذّر إتمام العملية كاملة. تحقّقي من الاتصال أو رابط GAS','err');
-      // محاولة تعويض: إن نجح أحدهما فقط، نجدد العرض على كل حال
-      refresh();
+      if(ok1 && ok2){
+        notify(`أُضيفت قراءة ${fmtPlain(readingVal)} ودفعة ${fmtPlain(amount)} ₪`);
+        // لا نفرّغ التاريخ حتى يبقى على اليوم
+        $('#readValue').value = '';
+        $('#customInstantAmount').value = '';
+        await refresh();
+      }else{
+        notify('تعذّر إتمام العملية كاملة. تحقّقي من الاتصال أو رابط GAS','err');
+        refresh();
+      }
+    } finally {
+      setLoading(btn, false);
     }
   }
 
@@ -589,6 +642,14 @@
     $('#theme').value = store.theme();
     $('#theme').addEventListener('change', e=> applyTheme(e.target.value));
 
+    // تعبئة التواريخ اليوم
+    const today = todayISO();
+    $('#readDate').value = today;
+    $('#payDate').value = today;
+
+    // ربط تاريخ الدفعة بتاريخ القراءة تلقائياً
+    $('#readDate').addEventListener('change', e=> { $('#payDate').value = e.target.value; });
+
     $('#tariff').value = store.tariff();
 
     $('#addReading').addEventListener('click', addReading);
@@ -598,18 +659,24 @@
     $('#exportBtn').addEventListener('click', exportJSON);
     $('#importFile').addEventListener('change', (e)=> e.target.files[0] && importJSON(e.target.files[0]));
     $('#saveTariff').addEventListener('click', saveTariff);
-
-    // GAS URL UI
     $('#saveGasUrl').addEventListener('click', saveGasUrl);
     syncGasUrlUI();
 
     // الحسبة الفورية + تفاعل مباشر
-    $('#readValue').addEventListener('input', previewPaymentForCurrentInput);
-    $('#readDate').addEventListener('change', previewPaymentForCurrentInput);
-    $('#tariff').addEventListener('input', previewPaymentForCurrentInput);
-    $('#calcNow').addEventListener('click', previewPaymentForCurrentInput);
+    const onInstantChange = ()=> previewPaymentForCurrentInput();
+    $('#readValue').addEventListener('input', onInstantChange);
+    $('#readDate').addEventListener('change', onInstantChange);
+    $('#tariff').addEventListener('input', onInstantChange);
+    $('#customInstantAmount').addEventListener('input', onInstantChange);
+    $('#calcNow').addEventListener('click', onInstantChange);
+
+    // Enter على قيمة القراءة = تحديث المعاينة
+    $('#readValue').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); previewPaymentForCurrentInput(); } });
 
     refresh();
+
+    // فوكس أوتوماتيك على القراءة للموبايل
+    setTimeout(()=> $('#readValue').focus?.(), 300);
   })();
   </script>
 </body>
