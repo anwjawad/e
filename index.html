@@ -87,6 +87,25 @@
     .tag.baseline{background:color-mix(in oklab, var(--warn) 25%, transparent)}
     .tag.pay{background:color-mix(in oklab, var(--primary) 18%, transparent)}
 
+    /* ===== NEW: Horizontal instant bar ===== */
+    .metrics-wrap{display:flex;flex-direction:column;gap:6px}
+    .metrics-bar{
+      display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+      padding:10px 12px;border:1px solid color-mix(in oklab, var(--fg) 12%, transparent);
+      border-radius:12px;background:transparent;
+      min-height:48px;
+    }
+    .chip{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:6px 10px;border-radius:999px;
+      background:color-mix(in oklab, var(--primary) 16%, transparent);
+      white-space:nowrap;  /* تبقى أفقية */
+    }
+    .chip.muted{background:color-mix(in oklab, var(--fg) 10%, transparent);color:var(--fg)}
+    .chip.warn{background:color-mix(in oklab, var(--warn) 22%, transparent)}
+    .chip.ok{background:color-mix(in oklab, var(--accent) 20%, transparent)}
+    .metrics-note{color:var(--muted);font-size:13px}
+
     /* Animations */
     .fade-in{animation:fade .4s both}
     @keyframes fade{from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none}}
@@ -108,6 +127,8 @@
       .field{flex:1 1 100%}
       .brand .logo{width:34px;height:34px}
       .card{padding:14px}
+      .metrics-bar{gap:8px}
+      .chip{padding:6px 8px}
     }
   </style>
 </head>
@@ -170,9 +191,16 @@
         <div class="row">
           <div class="field" style="flex:2">
             <label>الحسبة الفورية (من آخر قراءة مُسجلة)</label>
-            <div class="pill" id="instantPay">—</div>
-            <small id="instantInfo" style="color:var(--muted)">أدخل قراءة وتاريخاً لنحسب المطلوب فوراً. يمكنك أيضاً وضع دفعة مخصّصة.</small>
+
+            <!-- NEW: شريط أفقي -->
+            <div class="metrics-wrap">
+              <div id="instantBar" class="metrics-bar" aria-live="polite">
+                <span class="chip muted">—</span>
+              </div>
+              <small id="instantInfo" class="metrics-note">أدخل قراءة وتاريخاً لنحسب المطلوب فوراً. يمكنك أيضاً وضع دفعة مخصّصة.</small>
+            </div>
           </div>
+
           <div class="field">
             <label>مبلغ الدفعة المخصّصة (اختياري)</label>
             <input type="number" step="0.01" inputmode="decimal" id="customInstantAmount" class="input" placeholder="مثال: 150">
@@ -333,13 +361,13 @@
     const key = 'e_calc_mock_v1';
     const db = JSON.parse(localStorage.getItem(key) || '{"readings":[],"payments":[]}');
     if(p.action==='addReading'){
-      const row = {id: crypto.randomUUID(), dateISO: p.dateISO, valueKwh: Number(p.valueKwh), createdAt: new Date().toISOString()};
+      const row = {id: (crypto?.randomUUID?.()||('id_'+Math.random())), dateISO: p.dateISO, valueKwh: Number(p.valueKwh), createdAt: new Date().toISOString()};
       db.readings.push(row);
       localStorage.setItem(key, JSON.stringify(db));
       return {ok:true, row};
     }
     if(p.action==='addPayment'){
-      const row = {id: crypto.randomUUID(), dateISO: p.dateISO, amount: Number(p.amount), createdAt: new Date().toISOString()};
+      const row = {id: (crypto?.randomUUID?.()||('id_'+Math.random())), dateISO: p.dateISO, amount: Number(p.amount), createdAt: new Date().toISOString()};
       db.payments.push(row);
       localStorage.setItem(key, JSON.stringify(db));
       return {ok:true, row};
@@ -444,21 +472,24 @@
     return {ok:true, diff, cost, prev, dateISO, currentVal, tariff:t};
   }
 
-  function previewPaymentForCurrentInput(){
-    const instantPay = $('#instantPay');
-    const instantInfo = $('#instantInfo');
-    const btnAddInstant = $('#addInstantPayment');
+  function setInstantBar(chipsHtml, noteText){
+    const bar = $('#instantBar');
+    const note = $('#instantInfo');
+    bar.innerHTML = chipsHtml;
+    note.textContent = noteText || '';
+  }
 
+  function previewPaymentForCurrentInput(){
+    const btnAddInstant = $('#addInstantPayment');
     const res = computeInstant();
     btnAddInstant.disabled = true;
 
     if(!res.ok){
       if(res.reason==='no_value'){
-        instantPay.textContent = '—';
-        instantInfo.textContent = 'أدخل قراءة وتاريخاً لنحسب المطلوب فوراً.';
+        setInstantBar(`<span class="chip muted">—</span>`, 'أدخل قراءة وتاريخاً لنحسب المطلوب فوراً.');
       } else if(res.reason==='negative'){
-        instantPay.textContent = 'قراءة أقل من السابقة';
-        instantInfo.textContent = `القراءة السابقة كانت ${fmtPlain(res.prev.valueKwh)} ك.و.س بتاريخ ${new Date(res.prev.dateISO).toLocaleDateString('ar-EG')}.`;
+        setInstantBar(`<span class="chip warn">قراءة أقل من السابقة</span>`,
+          `القراءة السابقة كانت ${fmtPlain(res.prev.valueKwh)} ك.و.س بتاريخ ${new Date(res.prev.dateISO).toLocaleDateString('ar-EG')}.`);
       }
       return;
     }
@@ -467,19 +498,25 @@
     const usingCustom = Number.isFinite(custom) && custom >= 0;
 
     if(res.baseline){
-      instantPay.textContent = usingCustom
-        ? `أول قراءة مرجعية. سيتم دفع ${fmtMoneyAbs(custom)} ₪ كدفعة مخصّصة.`
-        : 'أول قراءة مرجعية (لا كلفة). يمكنك إدخال دفعة مخصّصة.';
-      instantInfo.textContent = `تاريخ القراءة ${new Date(res.dateISO).toLocaleDateString('ar-EG')} بسعر ${res.tariff} ₪/ك.و.س`;
+      const chips = usingCustom
+        ? `<span class="chip ok">أول قراءة مرجعية</span><span class="chip">دفعة مخصّصة: ${fmtMoneyAbs(custom)} ₪</span>`
+        : `<span class="chip ok">أول قراءة مرجعية</span><span class="chip muted">لا كلفة — يمكنك إدخال دفعة</span>`;
+      setInstantBar(
+        chips,
+        `تاريخ القراءة ${new Date(res.dateISO).toLocaleDateString('ar-EG')} بسعر ${res.tariff} ₪/ك.و.س`
+      );
       btnAddInstant.disabled = false; // نسمح بالإضافة حتى بدون كلفة
       return;
     }
 
     const cost = res.cost;
-    instantPay.textContent = usingCustom
-      ? `الكلفة المحسوبة ${fmtMoneyAbs(cost)} ₪، وسيُسجَّل دفع ${fmtMoneyAbs(custom)} ₪.`
-      : `لازم تدفع ${fmtMoneyAbs(cost)} ₪ وهي قيمة ${fmtPlain(res.diff)} ك.و.س`;
-    instantInfo.textContent = `من ${new Date(res.prev.dateISO).toLocaleDateString('ar-EG')} إلى ${new Date(res.dateISO).toLocaleDateString('ar-EG')} بسعر ${res.tariff} ₪/ك.و.س`;
+    const chips = usingCustom
+      ? `<span class="chip warn">الكلفة المحسوبة: ${fmtMoneyAbs(cost)} ₪</span><span class="chip">دفعة ستُسجّل: ${fmtMoneyAbs(custom)} ₪</span><span class="chip">الاستهلاك: ${fmtPlain(res.diff)} ك.و.س</span>`
+      : `<span class="chip warn">لازم تدفع: ${fmtMoneyAbs(cost)} ₪</span><span class="chip">الاستهلاك: ${fmtPlain(res.diff)} ك.و.س</span>`;
+    setInstantBar(
+      chips,
+      `من ${new Date(res.prev.dateISO).toLocaleDateString('ar-EG')} إلى ${new Date(res.dateISO).toLocaleDateString('ar-EG')} بسعر ${res.tariff} ₪/ك.و.س`
+    );
     btnAddInstant.disabled = false;
   }
 
