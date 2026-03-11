@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ Electricity Tracker</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="theme-dark">
+
+    <div class="app-container">
+        <!-- Floating Animated Backgrounds -->
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+
+        <header class="app-header glass-panel">
+            <div class="logo">
+                <i class="fa-solid fa-bolt-lightning glow-icon"></i>
+                <h1>E-Tracker</h1>
+            </div>
+
+            <button id="themeToggle" class="icon-btn" title="Toggle Theme">
+                <i class="fa-solid fa-moon"></i>
+            </button>
+        </header>
+
+        <main class="main-content">
+
+            <!-- Dashboard Info -->
+            <section class="dashboard-grid">
+                <div class="stat-card glass-panel" id="card-previous">
+                    <div class="stat-icon bg-blue">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                    </div>
+                    <div class="stat-details">
+                        <h3>Previous Reading</h3>
+                        <p class="stat-value"><span id="valPreviousReading">--</span> <span class="unit">kWh</span></p>
+                        <p class="stat-meta" id="valPreviousDate">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="stat-card glass-panel" id="card-tariff">
+                    <div class="stat-icon bg-purple">
+                        <i class="fa-solid fa-coins"></i>
+                    </div>
+                    <div class="stat-details">
+                        <h3>Current Tariff</h3>
+                        <p class="stat-value"><span id="valDefaultTariff">0.67</span> <span class="unit">ILS</span></p>
+                        <p class="stat-meta">Per kWh</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Main Input Form -->
+            <section class="form-section glass-panel">
+                <h2><i class="fa-solid fa-file-invoice-dollar"></i> New Entry</h2>
+
+                <form id="trackerForm">
+
+                    <div class="input-group">
+                        <label for="currentReading">Current Meter Reading (kWh)</label>
+                        <div class="input-wrapper">
+                            <i class="fa-solid fa-gauge-high"></i>
+                            <input type="number" id="currentReading" required placeholder="e.g. 11500" step="1">
+                        </div>
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="tariffInput">Tariff Price (ILS)</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-tag"></i>
+                                <input type="number" id="tariffInput" required value="0.67" step="0.01">
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="paymentAmount">Payment Amount (ILS)</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-sack-dollar"></i>
+                                <input type="number" id="paymentAmount" required placeholder="Amount you are paying"
+                                    step="0.5">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Calculation Results -->
+                    <div class="calc-results glass-inset">
+                        <div class="calc-item">
+                            <span class="calc-label">Consumption:</span>
+                            <span class="calc-value highlight"><span id="calcConsumption">0</span> kW</span>
+                        </div>
+                        <div class="calc-divider"></div>
+                        <div class="calc-item">
+                            <span class="calc-label">Total Cost:</span>
+                            <span class="calc-value highlight-green"><span id="calcCost">0.00</span> ILS</span>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary" id="submitBtn">
+                            <span class="btn-text">Save & Publish</span>
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <div class="loader hidden"></div>
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- History & Stats Section -->
+            <section class="history-section glass-panel mt-4">
+                <div class="history-header">
+                    <h2><i class="fa-solid fa-chart-line"></i> Analytics & History</h2>
+                </div>
+
+                <div class="stats-overview glass-inset">
+                    <div class="stat-mini">
+                        <span class="stat-mini-label">Total Consumption</span>
+                        <span class="stat-mini-val text-primary"><span id="valTotalConsumption">0</span> kW</span>
+                    </div>
+                    <div class="calc-divider"></div>
+                    <div class="stat-mini">
+                        <span class="stat-mini-label">Total Paid</span>
+                        <span class="stat-mini-val text-success"><span id="valTotalPaid">0.00</span> ILS</span>
+                    </div>
+                    <div class="calc-divider"></div>
+                    <div class="stat-mini">
+                        <span class="stat-mini-label">Net Balance</span>
+                        <span class="stat-mini-val" id="valNetBalanceContainer"><span id="valNetBalance"
+                                style="font-weight: 800;">0.00</span> ILS</span>
+                    </div>
+                </div>
+
+                <div class="history-list" id="historyList">
+                    <div class="text-center text-muted" style="padding: 20px;">Loading history...</div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <i class="fa-solid fa-circle-check"></i>
+        <span id="toastMessage">Success!</span>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
